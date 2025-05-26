@@ -25,10 +25,8 @@ jobs:
 
     - name: Run Python script
       run: |
-        python your_script.py
-        # 또는 특정 디렉토리의 스크립트
-        # python scripts/your_script.py
+        python get_cloud_data.py
+
       env:
         # 환경 변수가 필요한 경우 (GitHub Secrets 사용)
         API_KEY: ${{ secrets.API_KEY }}
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
