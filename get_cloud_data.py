@@ -1,10 +1,10 @@
 import os
-
 from fastapi import FastAPI
 import uvicorn
 import requests
 from datetime import datetime, timedelta
 import pandas as pd
+from tqdm import tqdm
 
 basetime = ['0200', '0500', '0800', '1100', '1400', '1700', '2000', '2300']
 url = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst'
@@ -12,8 +12,6 @@ service_key = 'cnFWOksdH2rQuZ9YQs2IR3frMjm2kgy8eauRY4ujdTSTvGEeDGXulTzCIJtU7htSZ
 base_time = '0200'
 nx = 37.5606111111111  # 예보지점 X 좌표
 ny = 127.039  # 예보지점 Y 좌표
-
-app = FastAPI()
 
 def calculate_base_time():
     """현재 시간 기준으로 가장 최근 base_time 반환"""
@@ -35,11 +33,6 @@ def calculate_base_time():
         base_date = (now - timedelta(days=1)).strftime('%Y%m%d')
         return base_date, '2300'
 
-@app.get("/")
-def main():
-    return {"message": "Hello World"}
-
-@app.get("/ultra_short_data")
 def get_ultra_short_data(nx, ny, base_date, base_time):
     # 요청 파라미터 구성
     df_final = pd.DataFrame()  # 최종 데이터프레임 초기화
@@ -60,7 +53,6 @@ def get_ultra_short_data(nx, ny, base_date, base_time):
             response = requests.get(url, params=params)
             if response.status_code == 200:
                 data = response.json()  # JSON 응답 파싱
-                print(data)
                 result_json = data['response']['body']['items']['item']
                 result_df = pd.DataFrame(result_json)
                 df_final = pd.concat([df_final, result_df], ignore_index=True)  # 데이터프레임 합치기
@@ -72,7 +64,6 @@ def get_ultra_short_data(nx, ny, base_date, base_time):
     return df_final.to_json(force_ascii=False)  # 최종 데이터프레임 반환
     df_final.to_csv('ultra_short_data.csv')  # CSV 파일로 저장
 
-@app.get("/short_term_data")
 def get_short_term_data():
     base_date, base_time = calculate_base_time()
     params = {
@@ -95,7 +86,6 @@ def get_short_term_data():
         print("❌ 요청 실패:", response.status_code)
 
 # 스케줄러 상태 확인 엔드포인트 추가
-@app.get("/scheduler/status")
 def get_scheduler_status():
     """스케줄러 상태 확인"""
     jobs = []
@@ -111,53 +101,77 @@ def get_scheduler_status():
         "jobs": jobs
     }
 
+
 def download_ultra_short_data():
     print("🐻기상 데이터 수집 시작")
     os.makedirs("data", exist_ok=True)  # 데이터 저장 폴더 생성
     region_code_df = pd.read_csv('지역_코드_정리.csv', encoding='utf-8-sig')
+    df_all_region = pd.DataFrame()  # 모든 지역의 데이터를 저장할 데이터프레임 초기화
+
     base_date, base_time = calculate_base_time()
     now_year = str(datetime.now().year)
     now_month = str(datetime.now().month)
 
     os.makedirs(os.path.join('data', now_year), exist_ok=True)  # 데이터 저장 폴더 생성
-    if os.path.exists(os.path.join('data', now_year, f"{now_year}_{now_month}.csv")):
-        check_region_df = pd.read_csv(os.path.join('data', now_year, f"{now_year}_{now_month}.csv"), encoding='utf-8-sig')
 
-        for index, row in region_code_df.iterrows():
+    if os.path.exists(os.path.join('data', now_year, f"{now_year}_{now_month}.csv")):
+        check_region_df = pd.read_csv(os.path.join('data', now_year, f"{now_year}_{now_month}.csv"),
+                                      encoding='utf-8-sig')
+
+        # tqdm으로 진행률 표시
+        for index, row in tqdm(region_code_df.iterrows(),
+                               total=len(region_code_df),
+                               desc="🌤️  기상 데이터 확인 중"):
             # 각 지역 코드에 대해 반복
             nx, ny = row['격자 X'], row['격자 Y']
-            region_df_check = region_code_df[(region_code_df['격자 X'] == nx & region_code_df['격자 Y'] == ny
-                                              & region_code_df['baseTime'] == base_time & region_code_df[
-                                                  'baseDate'] == base_date)]
-            if region_df_check != 835 or region_df_check != 943:
-                data = pd.read_json(get_ultra_short_data(nx, ny, base_date, base_time), orient='records')
-                data = data[data['category'] == 'SKY'].reset_index().drop(columns=['index'])  # 'SKY' 카테고리 데이터만 필터링
-                data['baseTime'] = data['baseTime'].astype(str).apply(lambda x: x.zfill(4))  # 문자열로 변환하고 0으로 채우기
-                data['fcstTime'] = data['fcstTime'].astype(str).apply(lambda x: x.zfill(4))  # 문자열로 변환하고 0으로 채우기
+            try:
+                region_df_check = check_region_df[(check_region_df['nx'] == nx) &
+                                                  (check_region_df['ny'] == ny) &
+                                                  (check_region_df['baseTime'] == base_time) &
+                                                  (check_region_df['baseDate'] == base_date)]
+            except:
+                region_df_check = pd.DataFrame()
 
-                df_all_region = pd.concat([df_all_region, data], ignore_index=True)  # 모든 지역의 데이터 합치기
+            try:
+                if len(region_df_check) != 835 or len(region_df_check) != 943:
+                    json_data = get_ultra_short_data(nx, ny, base_date, base_time)
+                    data = pd.read_json(StringIO(json_data), orient='records')
+                    data = data[data['category'] == 'SKY'].reset_index().drop(columns=['index'])  # 'SKY' 카테고리 데이터만 필터링
+                    data['baseTime'] = data['baseTime'].astype(str).apply(lambda x: x.zfill(4))  # 문자열로 변환하고 0으로 채우기
+                    data['fcstTime'] = data['fcstTime'].astype(str).apply(lambda x: x.zfill(4))  # 문자열로 변환하고 0으로 채우기
+
+                    df_all_region = pd.concat([df_all_region, data], ignore_index=True)  # 모든 지역의 데이터 합치기
+            except Exception as e:
+                print(e, data)
 
     else:
-        for index, row in region_code_df.iterrows():
+        # tqdm으로 진행률 표시 (전체 데이터 수집)
+        for index, row in tqdm(region_code_df.iterrows(),
+                               total=len(region_code_df),
+                               desc="🌤️  전체 기상 데이터 수집 중"):
             # 각 지역 코드에 대해 반복
             nx, ny = row['격자 X'], row['격자 Y']
             data = pd.read_json(get_ultra_short_data(nx, ny, base_date, base_time), orient='records')
-            data = data[data['category']=='SKY'].reset_index().drop(columns=['index'])  # 'SKY' 카테고리 데이터만 필터링
-            data['baseTime'] = data['baseTime'].astype(str).apply(lambda x: x.zfill(4)) # 문자열로 변환하고 0으로 채우기
-            data['fcstTime'] = data['fcstTime'].astype(str).apply(lambda x: x.zfill(4)) # 문자열로 변환하고 0으로 채우기
+            data = data[data['category'] == 'SKY'].reset_index().drop(columns=['index'])  # 'SKY' 카테고리 데이터만 필터링
+            data['baseTime'] = data['baseTime'].astype(str).apply(lambda x: x.zfill(4))  # 문자열로 변환하고 0으로 채우기
+            data['fcstTime'] = data['fcstTime'].astype(str).apply(lambda x: x.zfill(4))  # 문자열로 변환하고 0으로 채우기
 
             df_all_region = pd.concat([df_all_region, data], ignore_index=True)  # 모든 지역의 데이터 합치기
 
-
+    # 데이터 저장 과정에도 진행률 표시 (선택사항)
+    print("💾 데이터 저장 중...")
     if not os.path.exists(os.path.join('data', now_year, f"{now_year}_{now_month}.csv")):
-        df_all_region.to_csv(os.path.join('data', now_year, f"{now_year}_{now_month}.csv"), header=False, index=False)
+        df_all_region.to_csv(os.path.join('data', now_year, f"{now_year}_{now_month}.csv"), header=True, index=False)
     else:
         data_final = pd.read_csv(os.path.join('data', now_year, f"{now_year}_{now_month}.csv"))
         data_final = pd.concat([data_final, df_all_region], ignore_index=True)
         data_final.drop_duplicates(inplace=True)
-        data_final.to_csv(os.path.join('data', now_year, f"{now_year}_{now_month}.csv"), mode='a', header=False,
-                          index=False)
+        data_final.to_csv(os.path.join('data', now_year, f"{now_year}_{now_month}.csv"), index=False)
+
     print(f"🐻✅기상 데이터 수집 완료 - {base_date} {base_time} 기준")
 
+def main():
+    download_ultra_short_data()
+
 if __name__ == "__main__":
-    uvicorn.run("main:app", host='0.0.0.0', reload=True, port=8000)
+    main()
