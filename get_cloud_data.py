@@ -5,6 +5,8 @@ import requests
 from datetime import datetime, timedelta
 import pandas as pd
 from tqdm import tqdm
+from io import StringIO
+
 
 basetime = ['0200', '0500', '0800', '1100', '1400', '1700', '2000', '2300']
 url = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst'
