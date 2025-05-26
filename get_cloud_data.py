@@ -7,13 +7,13 @@ import pandas as pd
 from tqdm import tqdm
 from io import StringIO
 
-
 basetime = ['0200', '0500', '0800', '1100', '1400', '1700', '2000', '2300']
 url = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst'
 service_key = 'cnFWOksdH2rQuZ9YQs2IR3frMjm2kgy8eauRY4ujdTSTvGEeDGXulTzCIJtU7htSZeFnoof4l6RGh3EpVIbo1Q=='  # 인증키 (URL Encode 필요 없음)
 base_time = '0200'
 nx = 37.5606111111111  # 예보지점 X 좌표
 ny = 127.039  # 예보지점 Y 좌표
+
 
 def calculate_base_time():
     """현재 시간 기준으로 가장 최근 base_time 반환"""
@@ -29,15 +29,16 @@ def calculate_base_time():
             base_date = datetime.today().strftime('%Y%m%d')
             return base_date, base_times[i]
 
-
     if current_hour < 2:
         # 현재 시각이 02:00보다 이르면 전날 23:00
         base_date = (now - timedelta(days=1)).strftime('%Y%m%d')
         return base_date, '2300'
+
+
 def get_ultra_short_data(nx, ny, base_date, base_time):
     # 요청 파라미터 구성
     df_final = pd.DataFrame()  # 최종 데이터프레임 초기화
-    for i in range(1,2):
+    for i in range(1, 2):
         params = {
             'serviceKey': service_key,
             'numOfRows': '1000',
@@ -60,11 +61,17 @@ def get_ultra_short_data(nx, ny, base_date, base_time):
                 df_final = pd.concat([df_final, result_df], ignore_index=True)  # 데이터프레임 합치기
             else:
                 return ["요청 실패:", response.status_code]
-        except Exception as e:
-            raise ["❌ 요청 실패:", e]
-
+        except requests.exceptions.JSONDecodeError as e:
+            print("❌ JSON 디코딩 실패:", e)
+            print("응답 내용:", response.text[:500])  # 내용 미리보기
+            return None
+        except requests.exceptions.RequestException as e:
+            print("❌ 요청 실패:", e)
+            return None
     return df_final.to_json(force_ascii=False)  # 최종 데이터프레임 반환
     df_final.to_csv('ultra_short_data.csv')  # CSV 파일로 저장
+
+
 def get_short_term_data():
     base_date, base_time = calculate_base_time()
     params = {
@@ -85,6 +92,7 @@ def get_short_term_data():
 
     else:
         print("❌ 요청 실패:", response.status_code)
+
 
 def download_ultra_short_data():
     print("🐻기상 데이터 수집 시작")
@@ -109,9 +117,9 @@ def download_ultra_short_data():
             nx, ny = row['격자 X'], row['격자 Y']
             try:
                 now_target_df = already_save_df[(already_save_df['nx'] == nx) &
-                                                  (already_save_df['ny'] == ny) &
-                                                  (already_save_df['baseTime'] == base_time) &
-                                                  (already_save_df['baseDate'] == base_date)]
+                                                (already_save_df['ny'] == ny) &
+                                                (already_save_df['baseTime'] == base_time) &
+                                                (already_save_df['baseDate'] == base_date)]
             except:
                 now_target_df = pd.DataFrame()
 
@@ -120,11 +128,11 @@ def download_ultra_short_data():
                 data = pd.read_json(StringIO(json_data), orient='records')
 
             try:
-                    data = data[data['category'] == 'SKY'].reset_index().drop(columns=['index'])  # 'SKY' 카테고리 데이터만 필터링
-                    data['baseTime'] = data['baseTime'].astype(str).apply(lambda x: x.zfill(4))  # 문자열로 변환하고 0으로 채우기
-                    data['fcstTime'] = data['fcstTime'].astype(str).apply(lambda x: x.zfill(4))  # 문자열로 변환하고 0으로 채우기
+                data = data[data['category'] == 'SKY'].reset_index().drop(columns=['index'])  # 'SKY' 카테고리 데이터만 필터링
+                data['baseTime'] = data['baseTime'].astype(str).apply(lambda x: x.zfill(4))  # 문자열로 변환하고 0으로 채우기
+                data['fcstTime'] = data['fcstTime'].astype(str).apply(lambda x: x.zfill(4))  # 문자열로 변환하고 0으로 채우기
 
-                    already_save_df = pd.concat([already_save_df, data], ignore_index=True)  # 모든 지역의 데이터 합치기
+                already_save_df = pd.concat([already_save_df, data], ignore_index=True)  # 모든 지역의 데이터 합치기
             except Exception as e:
                 print(data)
                 print(e)
@@ -151,6 +159,7 @@ def download_ultra_short_data():
         already_save_df.to_csv(os.path.join('data', now_year, f"{now_year}_{now_month}.csv"), header=True, index=False)
 
     print(f"🐻✅기상 데이터 수집 완료 - {base_date} {base_time} 기준")
+
 
 def download_short_term_data():
     print("🐻기상 데이터 수집 시작")
@@ -219,9 +228,11 @@ def download_short_term_data():
         data_final.drop_duplicates(inplace=True)
         data_final.to_csv(os.path.join('data', now_year, f"{now_year}_{now_month}_short_term.csv"), index=False)
 
+
 def main():
     download_ultra_short_data()
     # download_short_term_data()
+
 
 if __name__ == "__main__":
     main()
