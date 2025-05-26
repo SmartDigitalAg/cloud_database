@@ -1,0 +1,16 @@
+name: cloud-data
+services:
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn main:app --host 0.0.0.0
+    ports:
+      - "6500:8000"
+    environment:
+      - FASTAPI_ENV=production
+      - PYTHONPATH=/app
+      - UVICORN_HOST=0.0.0.0
+    volumes:
+      - .:/app
