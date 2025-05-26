@@ -142,7 +142,7 @@ def download_ultra_short_data():
 
                     df_all_region = pd.concat([df_all_region, data], ignore_index=True)  # 모든 지역의 데이터 합치기
             except Exception as e:
-                print(e, data)
+                print(e)
 
     else:
         # tqdm으로 진행률 표시 (전체 데이터 수집)
