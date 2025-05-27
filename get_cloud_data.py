@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 from tqdm import tqdm
 from io import StringIO
+from zoneinfo import ZoneInfo  # Python 3.9 이상
+
 
 basetime = ['0200', '0500', '0800', '1100', '1400', '1700', '2000', '2300']
 url = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst'
@@ -17,7 +19,9 @@ ny = 127.039  # 예보지점 Y 좌표
 
 def calculate_base_time():
     """현재 시간 기준으로 가장 최근 base_time 반환"""
-    now = datetime.now()
+    # now = datetime.now()
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+
     current_hour = now.hour
 
     base_times = ['0200', '0500', '0800', '1100', '1400', '1700', '2000', '2300']
@@ -26,7 +30,7 @@ def calculate_base_time():
     # 현재 시각보다 이전인 발표 시각들 중 가장 최근 것
     for i in range(len(base_hours) - 1, -1, -1):  # 뒤에서부터 검색
         if current_hour >= base_hours[i]:
-            base_date = datetime.today().strftime('%Y%m%d')
+            base_date = datetime.now(ZoneInfo("Asia/Seoul")).strftime('%Y%m%d')
             return base_date, base_times[i]
 
     if current_hour < 2:
@@ -49,10 +53,9 @@ def get_ultra_short_data(nx, ny, base_date, base_time):
             'nx': nx,
             'ny': ny
         }
-
+        response = requests.get(url, params=params)
         # 요청 및 응답 처리
         try:
-            response = requests.get(url, params=params)
             if response.status_code == 200:
                 data = response.json()  # JSON 응답 파싱
                 result_json = data['response']['body']['items']['item']
@@ -100,8 +103,8 @@ def download_ultra_short_data():
     region_code_df = pd.read_csv('지역_코드_정리.csv', encoding='utf-8-sig')
 
     base_date, base_time = calculate_base_time()
-    now_year = str(datetime.now().year)
-    now_month = str(datetime.now().month)
+    now_year = str(datetime.now(ZoneInfo("Asia/Seoul")).year)
+    now_month = str(datetime.now(ZoneInfo("Asia/Seoul")).month)
 
     os.makedirs(os.path.join('data', now_year), exist_ok=True)  # 데이터 저장 폴더 생성
 
@@ -169,8 +172,8 @@ def download_short_term_data():
     df_all_region = pd.DataFrame()  # 모든 지역의 데이터를 저장할 데이터프레임 초기화
 
     base_date, base_time = calculate_base_time()
-    now_year = str(datetime.now().year)
-    now_month = str(datetime.now().month)
+    now_year = str(datetime.now(ZoneInfo("Asia/Seoul")).year)
+    now_month = str(datetime.now(ZoneInfo("Asia/Seoul")).month)
 
     os.makedirs(os.path.join('data', now_year), exist_ok=True)  # 데이터 저장 폴더 생성
 

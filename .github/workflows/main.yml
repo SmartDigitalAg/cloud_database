@@ -39,5 +39,6 @@ jobs:
         git commit -m "Update data from get_cloud_data.py" || echo "No changes to commit"
         git push
       env:
+        TZ: Asia/Seoul  # 환경 변수로 KST 지정
         # GitHub token이 있어야 push 가능
         GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
