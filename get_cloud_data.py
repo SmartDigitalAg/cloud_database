@@ -66,14 +66,13 @@ def get_ultra_short_data(nx, ny, base_date, base_time):
                 return ["요청 실패:", response.status_code]
         except requests.exceptions.JSONDecodeError as e:
             print("❌ JSON 디코딩 실패:", e)
+            print("요청 파라미터", params)
             print("응답 내용:", response.text[:500])  # 내용 미리보기
             return None
         except requests.exceptions.RequestException as e:
             print("❌ 요청 실패:", e)
             return None
     return df_final.to_json(force_ascii=False)  # 최종 데이터프레임 반환
-    df_final.to_csv('ultra_short_data.csv')  # CSV 파일로 저장
-
 
 def get_short_term_data():
     base_date, base_time = calculate_base_time()
@@ -109,7 +108,7 @@ def download_ultra_short_data():
     os.makedirs(os.path.join('data', now_year), exist_ok=True)  # 데이터 저장 폴더 생성
 
     if os.path.exists(os.path.join('data', now_year, f"{now_year}_{now_month}.csv")):
-        already_save_df = pd.read_csv(os.path.join('data', now_year, f"{now_year}_{now_month}.csv"),
+        already_save_df = pd.read_csv(os.path.join('data', now_year, f"{now_year}_{now_month}_ultra.csv"),
                                       encoding='utf-8-sig')
 
         # tqdm으로 진행률 표시
@@ -126,9 +125,13 @@ def download_ultra_short_data():
             except:
                 now_target_df = pd.DataFrame()
 
-            if len(now_target_df) != 835 or len(now_target_df) != 943:
-                json_data = get_ultra_short_data(nx, ny, base_date, base_time)
-                data = pd.read_json(StringIO(json_data), orient='records')
+            try:
+                if len(now_target_df) != 835 and len(now_target_df) != 943:
+                    json_data = get_ultra_short_data(nx, ny, base_date, base_time)
+                    data = pd.read_json(StringIO(json_data), orient='records')
+            except:
+                with open('error_log.txt', 'a') as f:
+                    f.write(f"Error for nx: {nx}, ny: {ny} at {base_date} {base_time}\n")
 
             try:
                 data = data[data['category'] == 'SKY'].reset_index().drop(columns=['index'])  # 'SKY' 카테고리 데이터만 필터링
