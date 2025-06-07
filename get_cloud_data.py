@@ -113,11 +113,13 @@ class WeatherDataCollector:
             return pd.read_csv(file_path, encoding='utf-8-sig')
         return pd.DataFrame()
 
-    def _check_data_completeness(self, existing_df, nx, ny, base_date, base_time, data_type):
+    def _check_data_completeness(self, existing_df, nx, ny, longitude, latitude, base_date, base_time, data_type):
         """특정 지역의 데이터 완성도 확인"""
         if existing_df.empty:
             return False
 
+        # 기본 필터링 조건 (nx, ny, baseTime, baseDate로만 확인)
+        # longitude, latitude는 나중에 추가될 수 있으므로 필터링에서 제외
         region_data = existing_df[
             (existing_df['nx'] == nx) &
             (existing_df['ny'] == ny) &
@@ -172,9 +174,10 @@ class WeatherDataCollector:
                            desc=f"🌤️ {data_type} 기상 데이터 처리 중"):
 
             nx, ny = row['격자 X'], row['격자 Y']
+            longitude, latitude = row['경도(초/100)'], row['위도(초/100)']
 
             # 기존 데이터가 완전한지 확인
-            if self._check_data_completeness(existing_df, nx, ny, base_date, base_time, data_type):
+            if self._check_data_completeness(existing_df, nx, ny, longitude, latitude, base_date, base_time, data_type):
                 skipped_count += 1
                 continue
 
@@ -195,13 +198,45 @@ class WeatherDataCollector:
 
         logger.info(f"🐻✅ {data_type} 기상 데이터 수집 완료 - {base_date} {base_time} 기준")
 
+    def _add_location_to_existing_data(self, df, column_type):
+        """기존 데이터에 위치 정보 추가"""
+        if df.empty:
+            return df
+
+        # 복사본 생성
+        df_copy = df.copy()
+
+        # 지역 정보와 매칭해서 위치 정보 추가
+        for _, region_row in self.region_df.iterrows():
+            nx, ny = region_row['격자 X'], region_row['격자 Y']
+
+            if column_type == 'longitude':
+                location_value = region_row['경도(초/100)']
+            else:  # latitude
+                location_value = region_row['위도(초/100)']
+
+            # 해당 nx, ny에 해당하는 행들에 위치 정보 추가
+            mask = (df_copy['nx'] == nx) & (df_copy['ny'] == ny)
+            df_copy.loc[mask, column_type] = location_value
+
+        return df_copy
+
     def _save_data(self, existing_df, new_data_list, file_path):
-        """데이터 저장"""
+        """데이터 저장 - 누락된 컬럼 자동 추가"""
         logger.info("💾 데이터 저장 중...")
 
         new_df = pd.concat(new_data_list, ignore_index=True)
 
         if not existing_df.empty:
+            # 기존 데이터에 longitude, latitude 컬럼이 없으면 추가
+            if 'longitude' not in existing_df.columns:
+                logger.info("📍 기존 데이터에 longitude 컬럼 추가 중...")
+                existing_df = self._add_location_to_existing_data(existing_df, 'longitude')
+
+            if 'latitude' not in existing_df.columns:
+                logger.info("📍 기존 데이터에 latitude 컬럼 추가 중...")
+                existing_df = self._add_location_to_existing_data(existing_df, 'latitude')
+
             final_df = pd.concat([existing_df, new_df], ignore_index=True)
             final_df.drop_duplicates(inplace=True)
         else:
@@ -209,7 +244,6 @@ class WeatherDataCollector:
 
         final_df.to_csv(file_path, index=False, encoding='utf-8-sig')
         logger.info(f"💾 저장 완료: {len(final_df)} 레코드")
-
 
 def main():
     """메인 실행 함수"""
