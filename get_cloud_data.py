@@ -214,15 +214,11 @@ class WeatherDataCollector:
 def main():
     """메인 실행 함수"""
     try:
-        # 명령행 인자로 데이터 타입 결정
-        data_type = sys.argv[1] if len(sys.argv) > 1 else 'ultra_short'
-
-        if data_type not in ['ultra_short', 'short_term']:
-            logger.error("❌ 잘못된 데이터 타입입니다. 'ultra_short' 또는 'short_term'을 사용하세요.")
-            sys.exit(1)
-
         collector = WeatherDataCollector()
-        collector.collect_weather_data(data_type)
+
+        # ultra_short와 short_term 둘 다 수집
+        for data_type in ['ultra_short', 'short_term']:
+            collector.collect_weather_data(data_type)
 
     except Exception as e:
         logger.error(f"❌ 메인 실행 중 오류 발생: {e}")
