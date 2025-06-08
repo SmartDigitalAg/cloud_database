@@ -12,8 +12,10 @@ import logging
 BASE_TIMES = ['0200', '0500', '0800', '1100', '1400', '1700', '2000', '2300']
 BASE_HOURS = [2, 5, 8, 11, 14, 17, 20, 23]
 URL = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst'
-SERVICE_KEY = 'cnFWOksdH2rQuZ9YQs2IR3frMjm2kgy8eauRY4ujdTSTvGEeDGXulTzCIJtU7htSZeFnoof4l6RGh3EpVIbo1Q=='
 SEOUL_TZ = ZoneInfo("Asia/Seoul")
+
+SERVICE_KEY = os.getenv("API_KEY")
+
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

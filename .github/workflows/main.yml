@@ -29,7 +29,7 @@ jobs:
 
       env:
         # 환경 변수가 필요한 경우 (GitHub Secrets 사용)
-        API_KEY: ${{ secrets.API_KEY }}
+        API_KEY: ${{ secrets.CLOUD_DATABASE }}
 
     - name: Commit and push changes
       run: |
